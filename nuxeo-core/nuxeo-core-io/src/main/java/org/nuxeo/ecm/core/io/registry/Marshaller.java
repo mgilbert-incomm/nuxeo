@@ -24,6 +24,7 @@ import java.lang.reflect.Type;
 import javax.inject.Inject;
 import javax.ws.rs.core.MediaType;
 
+import org.nuxeo.ecm.core.io.APIVersion;
 import org.nuxeo.ecm.core.io.registry.context.RenderingContext;
 import org.nuxeo.ecm.core.io.registry.reflect.Setup;
 import org.nuxeo.ecm.core.io.registry.reflect.Supports;
@@ -64,5 +65,15 @@ public interface Marshaller<EntityType> {
      * @since 7.2
      */
     public boolean accept(Class<?> clazz, Type genericType, MediaType mediatype);
+
+    /**
+     * Returns the REST API version.
+     *
+     * @since 11.1
+     * @see APIVersion#get()
+     */
+    default int getAPIVersion() {
+        return APIVersion.get();
+    }
 
 }
