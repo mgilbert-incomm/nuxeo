@@ -19,6 +19,7 @@ import {Layout} from '../nuxeo/layout';
 import {Schemas} from '../nuxeo/rest/schemas';
 import {Directory} from '../nuxeo/rpc/directory';
 import {Query} from '../nuxeo/rpc/query';
+import {DirectoryEditor} from '../ui/editors/directory';
 
 /**
  * Spreadsheet backed by Hansontable
@@ -41,6 +42,7 @@ class Spreadsheet {
       currentColClassName: 'currentCol',
       contextMenu: ['undo', 'redo'],
       afterChange: this.onChange.bind(this),
+      beforeAutofill: this.beforeAutofill.bind(this),
       search: true,
       cells: this.createCell.bind(this),
       language: language
@@ -64,17 +66,17 @@ class Spreadsheet {
       new Layout(connection, layout, language).fetch().then((l) => {
         // Check which columns to display
         let cols = (columns) ? columns.map((name) => l.columns.filter((c) => c.name === name)[0])
-          : l.columns.filter((c) => c.selectedByDefault !== false);
-        this.columns = cols
-          // Exclude columns without widgets
-          .filter((c) => c.widgets)
-          // Create our columns wrapper
-          .map((c) => new Column(connection, c, l.widgets[c.widgets[0].name], this.dirtyRenderer.bind(this)))
-          // Only show columns with a known widget type and with a field
-          .filter((c) => c.hasSupportedWidgetType && c.field);
-      });
+    : l.columns.filter((c) => c.selectedByDefault !== false);
+      this.columns = cols
+      // Exclude columns without widgets
+        .filter((c) => c.widgets)
+      // Create our columns wrapper
+    .map((c) => new Column(connection, c, l.widgets[c.widgets[0].name], this.dirtyRenderer.bind(this)))
+      // Only show columns with a known widget type and with a field
+    .filter((c) => c.hasSupportedWidgetType && c.field);
+    });
 
-    // or based on result columns only
+      // or based on result columns only
     } else {
 
       // get schemas prefixes from columns
@@ -96,49 +98,49 @@ class Spreadsheet {
             widget: {field: c.field}
           };
 
-          // get field from schemas map
-          let field = undefined; // <- explicitly set field as undefined in each iteration
-          if (c.field.indexOf(':') > -1) {
-            let [s, f] = c.field.split(':');
-            field = schemas[s].fields[f] || undefined;
-          }
+      // get field from schemas map
+      let field = undefined; // <- explicitly set field as undefined in each iteration
+      if (c.field.indexOf(':') > -1) {
+        let [s, f] = c.field.split(':');
+        field = schemas[s].fields[f] || undefined;
+      }
 
-          // set column widget type and properties based on field constraints
-          if (field) {
-            let constraints = field.itemConstraints || field.constraints;
-            if (constraints) {
-              for (let constraint of constraints) {
-                switch (constraint.name) {
-                  case 'directoryResolver':
-                    column.widget.type = (field.type === 'string[]') ? 'suggestManyDirectory' : 'suggestOneDirectory';
-                    column.widget.properties = {dbl10n: true, directoryName: constraint.parameters.directory};
-                    break;
-                  case 'userManagerResolver':
-                    column.widget.type = (field.type === 'string[]') ? 'multipleUsersSuggestion' : 'singleUserSuggestion';
-                    let searchType;
-                    if (constraint.parameters.includeGroups === 'true' && constraint.parameters.includeUsers === 'true') {
-                      searchType = 'USER_GROUP_TYPE';
-                    } else if (constraint.parameters.includeUsers === 'true') {
-                      searchType = 'USER_TYPE';
-                    } else if (constraint.parameters.includeGroups === 'true') {
-                      searchType = 'GROUP_TYPE';
-                    }
-                    column.widget.properties = {
-                      any: {
-                        userSuggestionSearchType: searchType
-                      }
-                    }
-                    break;
+      // set column widget type and properties based on field constraints
+      if (field) {
+        let constraints = field.itemConstraints || field.constraints;
+        if (constraints) {
+          for (let constraint of constraints) {
+            switch (constraint.name) {
+              case 'directoryResolver':
+                column.widget.type = (field.type === 'string[]') ? 'suggestManyDirectory' : 'suggestOneDirectory';
+                column.widget.properties = {dbl10n: true, directoryName: constraint.parameters.directory};
+                break;
+              case 'userManagerResolver':
+                column.widget.type = (field.type === 'string[]') ? 'multipleUsersSuggestion' : 'singleUserSuggestion';
+                let searchType;
+                if (constraint.parameters.includeGroups === 'true' && constraint.parameters.includeUsers === 'true') {
+                  searchType = 'USER_GROUP_TYPE';
+                } else if (constraint.parameters.includeUsers === 'true') {
+                  searchType = 'USER_TYPE';
+                } else if (constraint.parameters.includeGroups === 'true') {
+                  searchType = 'GROUP_TYPE';
                 }
-              }
+                column.widget.properties = {
+                  any: {
+                    userSuggestionSearchType: searchType
+                  }
+                };
+                break;
             }
           }
+        }
+      }
 
-          return column;
-        });
+      return column;
+    });
 
-        this.columns = cols.map((c) => new Column(connection, c.def, c.widget, this.dirtyRenderer.bind(this)));
-      });
+      this.columns = cols.map((c) => new Column(connection, c.def, c.widget, this.dirtyRenderer.bind(this)));
+    });
     }
 
     this.container.handsontable(this.options);
@@ -198,16 +200,16 @@ class Spreadsheet {
 
   _fetch() {
     return this.query.run()
-        .then((result) => {
-          Array.prototype.push.apply(this._data, result.entries);
-          // prevent adding new rows
-          this.ht.updateSettings({maxRows: this._data.length});
-          this.ht.render();
-          if (result.isNextPageAvailable) {
-            this.query.page++;
-            return this._fetch();
-          }
-        });
+      .then((result) => {
+      Array.prototype.push.apply(this._data, result.entries);
+    // prevent adding new rows
+    this.ht.updateSettings({maxRows: this._data.length});
+    this.ht.render();
+    if (result.isNextPageAvailable) {
+      this.query.page++;
+      return this._fetch();
+    }
+  });
   }
 
   update() {
@@ -225,30 +227,30 @@ class Spreadsheet {
           try {
             // TODO(nfgs) - Move request execution to the connection
             this.connection.request('/id/' + uid)
-                .put(
-                {data: this._dirty[uid]},
-                (error) => {
-                  if (error !== null) {
-                    this._dirty[uid]._error = error;
-                    reject(Error(error));
-                    return;
-                  }
-                  delete this._dirty[uid];
-                  resolve(uid);
-                });
-          } catch (e) {
-            this._dirty[uid]._error = e;
-            reject(Error(e));
-          }
-        });
-      })
-    ).catch((err) => {
+            .put(
+              {data: this._dirty[uid]},
+              (error) => {
+            if (error !== null) {
+      this._dirty[uid]._error = error;
+      reject(Error(error));
+      return;
+    }
+    delete this._dirty[uid];
+    resolve(uid);
+  });
+  } catch (e) {
+      this._dirty[uid]._error = e;
+      reject(Error(e));
+    }
+  });
+  })
+  ).catch((err) => {
       console.error(err);
-    }).then((result) => {
+  }).then((result) => {
       this.ht.clearUndo();
-      this.ht.render();
-      return result;
-    });
+    this.ht.render();
+    return result;
+  });
   }
 
   onChange(change, source) {
@@ -280,6 +282,123 @@ class Spreadsheet {
     }
   }
 
+  beforeAutofill(start, end, data) {
+    var ht = this.ht.getInstance();
+    var editor = ht.getActiveEditor();
+    if (!editor || !(editor instanceof DirectoryEditor)) {
+      return;
+    }
+    if (!data && (data.length === 0 || data[0].length === 0)) {
+      console.warn('It is not expected to have an empty data set.');
+      return;
+    }
+
+    var dragHorizontalDirection = 'NONE';
+    if (editor.cellProperties.col > start.col) {
+      dragHorizontalDirection = 'LEFT';
+    } else if (editor.cellProperties.col < start.col) {
+      dragHorizontalDirection = 'RIGHT';
+    }
+
+    var dragVerticalDirection = 'NONE';
+    if (editor.cellProperties.row > start.row) {
+      dragVerticalDirection = 'UP';
+    } else if (editor.cellProperties.row < start.row) {
+      dragVerticalDirection = 'DOWN';
+    }
+
+    var isMultiDimension = data.length > 1 && data[0].length > 1; // start.col < end.col && start.row < end.row
+    var edgeCell = this._getEdgeCell(start, end ,data, dragHorizontalDirection, dragVerticalDirection, isMultiDimension);
+
+
+    if (dragVerticalDirection === 'UP') {
+      data = data.reverse();
+    }
+    if (dragHorizontalDirection === 'LEFT') {
+      for (var k = 0; k < data.length; k++) {
+        data[k] = data[k].reverse();
+      }
+    }
+    for (var i = start.row; i <= end.row; i++) {
+      for (var j = start.col; j <= end.col; j++) {
+        var dataRowIndex = (i - start.row) % data.length;
+        var dataColIndex = (j - start.col) % data[0].length;
+        var dataEntry = data[dataRowIndex][dataColIndex];
+        var formattedLabel = editor.formatter(dataEntry);
+        if (!formattedLabel) {
+          var id = editor.getEntryId(dataEntry) || dataEntry.properties && dataEntry.properties.id;
+          var cell = ht.getCellMeta(i, j);
+          if (!cell._labels) {
+            cell._labels = {};
+          }
+          var originalCell = this._getOriginalCell(cell, edgeCell, data, dataRowIndex, dataColIndex, dragHorizontalDirection, dragVerticalDirection, isMultiDimension);
+          if (!originalCell._labels) {
+            console.warn('Something went wrong and we were not able to find any labels on the original cell (' + originalCell.row + ', ' + originalCell.col + ')');
+          } else {
+            cell._labels[id] = originalCell._labels[id];
+          }
+        }
+      }
+    }
+  }
+
+  _getEdgeCell(start, end, data, dragHorizontalDirection, dragVerticalDirection, isMultiDimension) {
+    // Compute Edge Cell
+    var edgeRow;
+    if (dragVerticalDirection === 'UP') {
+      edgeRow = end.row + data.length;
+    } else if (dragVerticalDirection === 'DOWN') {
+      edgeRow = start.row - data.length;
+    } else if (isMultiDimension) {
+      edgeRow = dragHorizontalDirection === 'LEFT' ?  end.row : start.row;
+    } else {
+      edgeRow = end.row;
+    }
+
+    var edgeCol;
+    if (dragHorizontalDirection === 'LEFT') {
+      edgeCol = end.col + data[0].length;
+    } else if (dragHorizontalDirection === 'RIGHT') {
+      edgeCol = start.col - data[0].length;
+    } else if (isMultiDimension) {
+      edgeCol = dragVerticalDirection === 'UP' ?  end.col : start.col;
+    } else {
+      edgeCol = start.col;
+    }
+
+    return this.ht.getInstance().getCellMeta(edgeRow, edgeCol);
+  }
+
+  _getOriginalCell(cell, edgeCell, data, dataRowIndex, dataColIndex, dragHorizontalDirection, dragVerticalDirection, isMultiDimension) {
+    // Compute Original Dragging Cell
+    var originalRow;
+    if (dragVerticalDirection === 'UP') {
+      originalRow = edgeCell.row - dataRowIndex;
+    } else if (dragVerticalDirection === 'DOWN') {
+      originalRow = edgeCell.row + dataRowIndex;
+    } else if (isMultiDimension) {
+      originalRow = cell.row;
+    } else {
+      originalRow = edgeCell.row;
+    }
+
+    var originalCol;
+    if (dragHorizontalDirection === 'LEFT') {
+      originalCol = edgeCell.col - dataColIndex;
+    } else if (dragHorizontalDirection === 'RIGHT') {
+      originalCol = edgeCell.col - dataColIndex;
+    } else if (isMultiDimension) {
+      originalCol = cell.col;
+    } else {
+      originalCol = edgeCell.col;
+    }
+
+    //var originalRow = dragVerticalDirection === 'UP' ? edgeCell.row - dataRowIndex : edgeCell.row + dataRowIndex;
+    //var originalCol = dragHorizontalDirection === 'LEFT' ? edgeCell.col - dataColIndex : edgeCell.col + dataColIndex;
+
+    return this.ht.getInstance().getCellMeta(originalRow, originalCol);
+  }
+
   dirtyRenderer(instance, td, row, col, prop, value, cellProperties) {
     Handsontable.renderers.TextRenderer.apply(this, arguments);
     var doc = this.getDataAtRow(row);
@@ -289,7 +408,7 @@ class Spreadsheet {
       // check for errors
       if (this._dirty[doc.uid].hasOwnProperty('_error')) {
         color = '#f33';
-      // check for dirty property
+        // check for dirty property
       } else if (hasProp(this._dirty[doc.uid], prop)) {
         color = '#afd8ff';
       }
