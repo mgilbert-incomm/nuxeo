@@ -23,22 +23,52 @@ package org.nuxeo.ecm.platform.filemanager.service.extension;
 
 import org.nuxeo.common.xmap.annotation.XNode;
 import org.nuxeo.common.xmap.annotation.XObject;
+import org.nuxeo.ecm.core.api.NuxeoException;
+import org.nuxeo.runtime.model.Descriptor;
 
 @XObject("folderImporter")
-public class FolderImporterDescriptor {
+public class FolderImporterDescriptor implements Descriptor {
 
     @XNode("@name")
     protected String name;
 
+    /**
+     * @deprecated since 11.1.
+     */
+    @Deprecated(since = "11.1")
     @XNode("@class")
     protected String className;
+
+    @XNode("@class")
+    protected Class<? extends FolderImporter> klass;
 
     public String getName() {
         return name;
     }
 
+    /**
+     * @deprecated since 11.1.
+     */
+    @Deprecated(since = "11.1")
     public String getClassName() {
         return className;
     }
 
+    /**
+     * @since 11.1
+     */
+    public FolderImporter newInstance() {
+        try {
+            FolderImporter folderImporter = klass.getDeclaredConstructor().newInstance();
+            folderImporter.setName(name);
+            return folderImporter;
+        } catch (ReflectiveOperationException e) {
+            throw new NuxeoException(e);
+        }
+    }
+
+    @Override
+    public String getId() {
+        return name;
+    }
 }
