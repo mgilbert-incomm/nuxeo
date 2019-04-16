@@ -23,7 +23,6 @@ import static org.nuxeo.ecm.platform.oauth2.tokens.NuxeoOAuth2Token.SCHEMA;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +37,7 @@ import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -51,11 +51,13 @@ import org.nuxeo.ecm.directory.Session;
 import org.nuxeo.ecm.directory.api.DirectoryService;
 import org.nuxeo.ecm.platform.oauth2.clients.OAuth2Client;
 import org.nuxeo.ecm.platform.oauth2.clients.OAuth2ClientService;
+import org.nuxeo.ecm.platform.oauth2.enums.NuxeoOAuth2TokenType;
 import org.nuxeo.ecm.platform.oauth2.providers.AbstractOAuth2UserEmailProvider;
 import org.nuxeo.ecm.platform.oauth2.providers.NuxeoOAuth2ServiceProvider;
 import org.nuxeo.ecm.platform.oauth2.providers.OAuth2ServiceProvider;
 import org.nuxeo.ecm.platform.oauth2.providers.OAuth2ServiceProviderRegistry;
 import org.nuxeo.ecm.platform.oauth2.tokens.NuxeoOAuth2Token;
+import org.nuxeo.ecm.platform.oauth2.tokens.OAuth2TokenService;
 import org.nuxeo.ecm.platform.oauth2.tokens.OAuth2TokenStore;
 import org.nuxeo.ecm.webengine.model.WebObject;
 import org.nuxeo.ecm.webengine.model.exceptions.WebResourceNotFoundException;
@@ -75,7 +77,11 @@ import com.google.api.client.auth.oauth2.Credential;
 @WebObject(type = "oauth2")
 public class OAuth2Object extends AbstractResource<ResourceTypeImpl> {
 
-    public static final String TOKEN_DIR = "oauth2Tokens";
+    /**
+     * @deprecated since 11.1. Use {@link OAuth2TokenService#TOKEN_DIR} instead.
+     */
+    @Deprecated
+    public static final String TOKEN_DIR = OAuth2TokenService.TOKEN_DIR;
 
     /**
      * Lists all oauth2 service providers.
@@ -191,7 +197,23 @@ public class OAuth2Object extends AbstractResource<ResourceTypeImpl> {
     @Path("token")
     public List<NuxeoOAuth2Token> getTokens(@Context HttpServletRequest request) {
         checkPermission(null);
-        return getTokens();
+        return Framework.getService(OAuth2TokenService.class).getTokens();
+    }
+
+    /**
+     * Retrieves all OAuth2 tokens by oAuth2 token type.
+     *
+     * @param type, the value of {@link NuxeoOAuth2TokenType}
+     * @param request the http request
+     * @return if <code>type</code> is {@link NuxeoOAuth2TokenType#AS_PROVIDER} value, then we retrieve tokens that are provided
+     *         by Nuxeo, otherwise those used by Nuxeo to connect to others applications
+     * @since 11.1
+     */
+    @GET
+    @Path("token/{type}")
+    public List<NuxeoOAuth2Token> getTokens(@PathParam("type") String type, @Context HttpServletRequest request) {
+        checkPermission(null);
+        return Framework.getService(OAuth2TokenService.class).getTokens(NuxeoOAuth2TokenType.fromValueType(type));
     }
 
     /**
@@ -379,6 +401,60 @@ public class OAuth2Object extends AbstractResource<ResourceTypeImpl> {
         return Response.ok(client).build();
     }
 
+    /**
+     * Create a new oauth2 client.
+     *
+     * @param request the http request
+     * @param client the oAuth2Client to create
+     * @return the {@link Response}
+     * @since 11.1
+     */
+    @POST
+    @Path("client")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response createClient(@Context HttpServletRequest request, OAuth2Client client) {
+        checkPermission(null);
+        OAuth2Client oAuth2Client = Framework.getService(OAuth2ClientService.class).create(client);
+        return Response.status(Status.CREATED).entity(oAuth2Client).build();
+    }
+
+    /**
+     * Update the oauth2 client.
+     *
+     * @param clientId the oAuth2 client id to update
+     * @param request the http request
+     * @param client the oAuth2Client to update
+     * @return the {@link Response}
+     * @since 11.1
+     */
+    @PUT
+    @Path("client/{clientId}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response updateClient(@PathParam("clientId") String clientId, @Context HttpServletRequest request,
+            OAuth2Client client) {
+        checkPermission(null);
+        OAuth2Client oAuth2Client = Framework.getService(OAuth2ClientService.class).update(clientId, client);
+        return Response.ok(oAuth2Client).build();
+    }
+
+    /**
+     * Delete the oauth2 client.
+     *
+     * @param clientId the oAuth2 client id to delete
+     * @param request the http request
+     * @return the {@link Response}
+     * @since 11.1
+     */
+    @DELETE
+    @Path("client/{clientId}")
+    public Response deleteClient(@PathParam("clientId") String clientId, @Context HttpServletRequest request) {
+        checkPermission(null);
+        Framework.getService(OAuth2ClientService.class).delete(clientId);
+        return Response.noContent().build();
+    }
+
     protected List<NuxeoOAuth2ServiceProvider> getProviders() {
         OAuth2ServiceProviderRegistry registry = Framework.getService(OAuth2ServiceProviderRegistry.class);
         return registry.getProviders()
@@ -397,23 +473,20 @@ public class OAuth2Object extends AbstractResource<ResourceTypeImpl> {
         return (NuxeoOAuth2ServiceProvider) provider;
     }
 
+    /**
+     * @deprecated since 11.1. Use {@link OAuth2TokenService#getTokens()} instead.
+     */
+    @Deprecated
     protected List<NuxeoOAuth2Token> getTokens() {
-        return getTokens((String) null);
+        return Framework.getService(OAuth2TokenService.class).getTokens();
     }
 
+    /**
+     * @deprecated since 11.1. Use {@link OAuth2TokenService#getTokens(String)} instead.
+     */
+    @Deprecated
     protected List<NuxeoOAuth2Token> getTokens(String nxuser) {
-        return Framework.doPrivileged(() -> {
-            DirectoryService ds = Framework.getService(DirectoryService.class);
-            try (Session session = ds.open(TOKEN_DIR)) {
-                Map<String, Serializable> filter = new HashMap<>();
-                if (nxuser != null) {
-                    filter.put(NuxeoOAuth2Token.KEY_NUXEO_LOGIN, nxuser);
-                }
-                List<DocumentModel> docs = session.query(filter, Collections.emptySet(), Collections.emptyMap(), true,
-                        0, 0);
-                return docs.stream().map(NuxeoOAuth2Token::new).collect(Collectors.toList());
-            }
-        });
+        return Framework.getService(OAuth2TokenService.class).getTokens(nxuser);
     }
 
     protected OAuth2Client getClient(String clientId) {
