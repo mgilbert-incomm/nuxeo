@@ -168,6 +168,11 @@
       <artifactId>elasticsearch</artifactId>
       <scope>provided</scope>
     </dependency>
+    <!-- needed at test runtime -->
+    <dependency>
+      <groupId>javax.annotation</groupId>
+      <artifactId>jsr250-api</artifactId>
+    </dependency>
     <!-- overridden test scopes -->
     <dependency>
       <groupId>org.nuxeo.runtime</groupId>

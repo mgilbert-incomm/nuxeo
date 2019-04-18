@@ -97,5 +97,10 @@
       <artifactId>nuxeo-platform-login-default</artifactId>
       <scope>runtime</scope>
     </dependency>
+    <!-- needed at test runtime -->
+    <dependency>
+      <groupId>javax.annotation</groupId>
+      <artifactId>jsr250-api</artifactId>
+    </dependency>
   </dependencies>
 </project>
